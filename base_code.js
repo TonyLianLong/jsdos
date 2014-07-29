@@ -404,10 +404,10 @@ function run_code(RAM,register){
 			switch(RAM[addr+1]){
 				case 0x10:
 					switch((register["AX"]>>8)&0xFF){
-						/*case 0x0:
-							console.log("Set screen mode");
+						case 0x0:
+							console.log("Set screen mode,ignore.");
 							//Ignore
-						break;*/
+						break;
 						case 0x3:
 							console.log("Get cursor");
 							register["AX"] = 0;
@@ -428,6 +428,7 @@ function run_code(RAM,register){
 						break;
 						case 0x2:
 							console.log("Set cursor");
+							set_cursor(register["DX"]&0xFF,(register["DX"]&0xFF00)>>8);
 						break;
 						default:
 							finished = true;

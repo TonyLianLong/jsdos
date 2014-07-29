@@ -13,9 +13,9 @@
 </head>
 
 <body id="body">
-<div class="console">
-DOS JavaScript
-</div>
+<table class="console">
+
+</table>
 <script>
 $(this).keydown(function (e){
 	var keycode = e.keyCode;
@@ -52,6 +52,7 @@ var register;
 var IO_port;
 var finished;
 $(document).ready(function(e) {
+	console_init();
 	setconsole("DOS JavaScript v0.1");
 	console_print("Reading floppy...");
 	var disk_size = 1440*1024;

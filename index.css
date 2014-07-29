@@ -6,18 +6,54 @@
 	height:100%;
 }
 .console {
-	width:100%;
-	height:100%;
+	/*width:100%;
+	height:100%;*/
+	width:640px;
+	height:510px;
 	overflow: hidden;
 	background-color: #000000;
-	color: #C0C0C0;
+	color: #F0F0F0;
 	font-family: "Courier New", Courier, monospace;
 	font-weight: bold;
 	font-size: 14px;
-	padding: 2px 2px 2px 2px;
 	position: absolute;
 	top: 0px;
 	left: 0px;
 	outline: none;
 	white-space: pre;
+	padding:0px 0px 0px 0px;
+	margin:0px 0px 0px 0px;
+	border-collapse:separate;
+	border-spacing:0px;
+}
+.console tr{
+	height:17px;
+}
+.console tr td {
+	height:17px;
+	width:640px;
+	padding:0px 0px 0px 0px;
+}
+.cursor {
+	/*background-color:#F0F0F0;;*/
+	width:10px;
+	height:17px;
+	position:absolute;
+	left:0px;
+	top:0px;
+}
+.cursor_table {
+	width:10px;
+	height:17px;
+	padding:0px 0px 0px 0px;
+	margin:0px 0px 0px 0px;
+	border-collapse:separate;
+	border-spacing:0px;
+}
+.cursor_table tr {
+	height:2px;
+}
+.cursor_table tr td {
+	height:2px;
+	background-color:#F0F0F0;
 }
