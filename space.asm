@@ -1,0 +1,44 @@
+times 4*512 db 0
+%include "FAT_sector.asm"
+times 240*512-512 db 0
+;FAT 1
+%include "FAT_sector.asm"
+times 240*512-512 db 0
+;FAT 2
+db "COMMAND "
+;FILENAME
+db "COM"
+;EXT
+db 0x27, 0x00, 0x00, 0x00, 0x00
+db 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0xB5, 0xF7, 0x44
+dw 2
+;Cluster
+dd 2048
+;File size,less than 8192 bytes(a cluster)
+db "PROGRAM "
+;FILENAME
+db "COM"
+;EXT
+db 0x20, 0x00, 0x00, 0x00, 0x00
+db 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0xB5, 0xF7, 0x44
+dw 3
+;Cluster
+dd 1024
+;File size,less than 8192 bytes(a cluster)
+db "DIR     "
+;FILENAME
+db "COM"
+;EXT
+db 0x20, 0x00, 0x00, 0x00, 0x00
+db 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0xB5, 0xF7, 0x44
+dw 4
+;Cluster
+dd 1024
+;File size,less than 8192 bytes(a cluster)
+times 0x20*512-3*0x20 db 0
+;Root directory(two space of file is used)
+
+;Less or equal than 8192 bytes(a cluster)
+;times 0x42A00-512*5-($-$$) db 0
+
+;times 1440*1024-512*5-1*8192-($-$$) db 0
