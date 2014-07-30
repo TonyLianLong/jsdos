@@ -59,7 +59,9 @@
 	padding:0px 0px 0px 0px;
 	margin:0px 0px 0px 0px;
 	border-width:0px 0px 0px 0px;
-	left:0px;
-	top:0px;
-	position:absolute;
+	width:640px;
+	height:510px;
+}
+.txt {
+	font-size:12px;
 }
