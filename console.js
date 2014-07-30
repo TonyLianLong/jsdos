@@ -115,7 +115,7 @@ function set_cursor(left,top){
 	cursor_left = left;
 	cursor_top = top;
 	$(".cursor").css("left",String(left*8)+"px");
-	$(".cursor").css("top",String(top*17)+"px");
+	$(".cursor").css("top",String(top*17-510)+"px");
 	console.log("Cursor left:"+cursor_left+" top:"+cursor_top);
 }
 function scrollup(num){

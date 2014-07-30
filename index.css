@@ -16,7 +16,7 @@
 	font-family: "Courier New", Courier, monospace;
 	font-weight: bold;
 	font-size: 14px;
-	position: absolute;
+	position: relative;
 	top: 0px;
 	left: 0px;
 	outline: none;
@@ -38,9 +38,7 @@
 	/*background-color:#F0F0F0;;*/
 	width:10px;
 	height:17px;
-	position:absolute;
-	left:0px;
-	top:0px;
+	position:relative;
 }
 .cursor_table {
 	width:10px;
@@ -56,4 +54,12 @@
 .cursor_table tr td {
 	height:2px;
 	background-color:#F0F0F0;
+}
+.control_div {
+	padding:0px 0px 0px 0px;
+	margin:0px 0px 0px 0px;
+	border-width:0px 0px 0px 0px;
+	left:0px;
+	top:0px;
+	position:absolute;
 }

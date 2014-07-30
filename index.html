@@ -13,9 +13,15 @@
 </head>
 
 <body id="body">
+<p>
+A dos emulator.
+<br />
+Source code is <a href="https://github.com/TonyLianLong/jsdos">here</a>. </p>
+<div class="control_div">
 <table class="console">
 
 </table>
+</div>
 <script>
 $(this).keydown(function (e){
 	var keycode = e.keyCode;
@@ -51,6 +57,7 @@ var RAM;
 var register;
 var IO_port;
 var finished;
+var a20;
 $(document).ready(function(e) {
 	console_init();
 	setconsole("DOS JavaScript v0.1");
@@ -91,6 +98,7 @@ $(document).ready(function(e) {
 	no_code_length_added = 0;
 	count = 0;
 	machine_mode = POWER_ON;
+	a20 = false;
 	finished = false;
 	setInterval(timer,55);
 	while(!finished){
