@@ -117,7 +117,7 @@ function run_code(RAM,register){
 	var segment = "DS";
 	var addr = (register["CS"]<<4)+register["IP"];
 	no_code_length_added = 0;
-	if(addr>1024*1024){
+	if(a20 == false){
 		addr=addr%(1024*1024);
 	}
 	console.log("Addr:0x"+addr.toString(16));
@@ -145,9 +145,15 @@ function run_code(RAM,register){
 	switch(RAM[addr]){
 		case 0xEB://JMP
 			console.log("JMP");
-			register["IP"] += rel(RAM[addr+1],8);
+			var next_RAM_data;
+			if(a20 == false){
+				next_RAM_data = RAM[(addr+1)%(1024*1024)];
+			}else{
+				next_RAM_data = RAM[cal_addr(addr+1)];
+			}
+			register["IP"] += rel(next_RAM_data,8);
 			code_length=2;
-			if(rel(RAM[addr+1],8) == -2){
+			if(rel(next_RAM_data,8) == -2){
 				console.log("Loop");
 				machine_mode = POWER_HALT;
 			}
@@ -159,8 +165,14 @@ function run_code(RAM,register){
 		break;
 		case 0x33://XOR
 			console.log("XOR");
-			//modRM(XOR,RAM[addr+1],16,16);
-			var c = RAM[addr+1];
+			//modRM(XOR,RAM[cal_addr(addr+1)],16,16);
+			var next_RAM_data;
+			if(a20 == false){
+				next_RAM_data = RAM[(addr+1)%(1024*1024)];
+			}else{
+				next_RAM_data = RAM[cal_addr(addr+1)];
+			}
+			var c = next_RAM_data;
 			var len1 = 1;
 			var len2 = 1;
 			if((c&0xC0) != 0xC0){
@@ -177,8 +189,8 @@ function run_code(RAM,register){
 			code_length=2;
 		break;
 		case 0x8E://MOV
-			//modRM(MOV,RAM[addr+1],SREG_LENGTH,16);
-			var c = RAM[addr+1];
+			//modRM(MOV,RAM[cal_addr(addr+1)],SREG_LENGTH,16);
+			var c = RAM[cal_addr(addr+1)];
 			var len1 = 5;
 			var len2 = 1;
 			if((c&0xC0) != 0xC0){
@@ -193,18 +205,31 @@ function run_code(RAM,register){
 			code_length=2;
 		break;
 		case 0xBC://MOV SP
-			register["SP"] = RAM[addr+1]|RAM[addr+2]<<8;
+			if(a20){
+				register["SP"] = RAM[cal_addr(addr+1)]|RAM[cal_addr(addr+2)]<<8;
+			}else{
+				register["SP"] = RAM[(addr+1)%(1024*1024)]|RAM[(addr+2)%(1024*1024)]<<8;
+			}
 			console.log("SP:0x"+register["SP"].toString(16));
 			code_length=3;
 		break;
 		case 0x16://PUSH SS
 			register["SP"] = register["SP"] - 2;
-			RAM[(register["SS"]<<4)+register["SP"]] = register["SS"]>>8;
-			RAM[(register["SS"]<<4)+register["SP"]+1] = register["SS"]&0xFF;
+			if(a20){
+				RAM[(register["SS"]<<4)+register["SP"]] = register["SS"]>>8;
+				RAM[(register["SS"]<<4)+register["SP"]+1] = register["SS"]&0xFF;
+			}else{
+				RAM[((register["SS"]<<4)+register["SP"])%(1024*1024)] = register["SS"]>>8;
+				RAM[((register["SS"]<<4)+register["SP"]+1)%(1024*1024)] = register["SS"]&0xFF;
+			}
 			code_length=1;
 		break;
 		case 0x07://POP ES
-			register["ES"] = RAM[(register["SS"]<<4)+register["SP"]]<<8|RAM[(register["SS"]<<4)+register["SP"]+1]&0xFF;
+			if(a20){
+				register["ES"] = RAM[(register["SS"]<<4)+register["SP"]]<<8|RAM[(register["SS"]<<4)+register["SP"]+1]&0xFF;
+			}else{
+				register["ES"] = RAM[((register["SS"]<<4)+register["SP"])%(1024*1024)]<<8|RAM[((register["SS"]<<4)+register["SP"]+1)%(1024*1024)]&0xFF;
+			}
 			register["SP"] = register["SP"] + 2;
 			console.log("ES:"+register["ES"]);
 			code_length=1;
@@ -212,39 +237,63 @@ function run_code(RAM,register){
 		case 0x1E://PUSH DS
 			console.log("PUSH DS:0x"+register["DS"].toString(16));
 			register["SP"] = register["SP"] - 2;
-			RAM[(register["SS"]<<4)+register["SP"]] = register["DS"]>>8;
-			RAM[(register["SS"]<<4)+register["SP"]+1] = register["DS"]&0xFF;
+			if(a20){
+				RAM[(register["SS"]<<4)+register["SP"]] = register["DS"]>>8;
+				RAM[(register["SS"]<<4)+register["SP"]+1] = register["DS"]&0xFF;
+			}else{
+				RAM[((register["SS"]<<4)+register["SP"])%(1024*1024)] = register["DS"]>>8;
+				RAM[((register["SS"]<<4)+register["SP"]+1)%(1024*1024)] = register["DS"]&0xFF;
+			}
 			code_length=1;
 		break;
 		case 0x56://PUSH SI
 			register["SP"] = register["SP"] - 2;
-			RAM[(register["SS"]<<4)+register["SP"]] = register["SI"]>>8;
-			RAM[(register["SS"]<<4)+register["SP"]+1] = register["SI"]&0xFF;
+			if(a20){
+				RAM[(register["SS"]<<4)+register["SP"]] = register["SI"]>>8;
+				RAM[(register["SS"]<<4)+register["SP"]+1] = register["SI"]&0xFF;
+			}else{
+				RAM[((register["SS"]<<4)+register["SP"])%(1024*1024)] = register["SI"]>>8;
+				RAM[((register["SS"]<<4)+register["SP"]+1)%(1024*1024)] = register["SI"]&0xFF;
+			}
 			code_length=1;
 		break;
 		case 0x53://PUSH BX
 			console.log("PUSH BX data:0x"+register["BX"].toString(16));
 			register["SP"] = register["SP"] - 2;
 			console.log("0x"+((register["SS"]<<4)+register["SP"]).toString(16));
-			RAM[(register["SS"]<<4)+register["SP"]] = register["BX"]>>8;
-			RAM[(register["SS"]<<4)+register["SP"]+1] = register["BX"]&0xFF;
+			if(a20){
+				RAM[(register["SS"]<<4)+register["SP"]] = register["BX"]>>8;
+				RAM[(register["SS"]<<4)+register["SP"]+1] = register["BX"]&0xFF;
+			}else{
+				RAM[((register["SS"]<<4)+register["SP"])%(1024*1024)] = register["BX"]>>8;
+				RAM[((register["SS"]<<4)+register["SP"]+1)%(1024*1024)] = register["BX"]&0xFF;
+			}
 			code_length=1;
 		break;
 		case 0xBB://MOV BX
-			register["BX"] = RAM[addr+1]|RAM[addr+2]<<8;
+			if(a20){
+				register["BX"] = RAM[cal_addr(addr+1)]|RAM[cal_addr(addr+2)]<<8;
+			}else{
+				register["BX"] = RAM[(addr+1)%(1024*1024)]|RAM[(addr+2)%(1024*1024)]<<8;
+			}
 			console.log("BX:0x"+register["BX"].toString(16));
 			code_length=3;
 		break;
 		case 0xC5://LDS
 			console.log("LDS");
-			var c = RAM[addr+1];
+			var c = RAM[cal_addr(addr+1)];
 			var len1 = 1;
 			var len2 = 0;
 			console.log(c.toString(16),c&0xC0);
 			if((c&0xC0) != 0xC0){
 				//RAM[modRM_arr2[((c>>3)&0x18)|(c&0x7)][len2]] = 0;//register[modRM_arr1[(c>>3)&0x7][len1]];
-				register[modRM_arr1[(c>>3)&0x7][len1]] = RAM[(register[segment]<<4)+register[modRM_arr2[((c>>3)&0x18)|(c&0x7)][len2]]]+(RAM[(register[segment]<<4)+register[modRM_arr2[((c>>3)&0x18)|(c&0x7)][len2]]+1]<<8);
-				register["DS"] = RAM[(register[segment]<<4)+register[modRM_arr2[((c>>3)&0x18)|(c&0x7)][len2]]+2]+(RAM[(register[segment]<<4)+register[modRM_arr2[((c>>3)&0x18)|(c&0x7)][len2]]+3]<<8);
+				if(a20){
+					register[modRM_arr1[(c>>3)&0x7][len1]] = RAM[(register[segment]<<4)+register[modRM_arr2[((c>>3)&0x18)|(c&0x7)][len2]]]+(RAM[(register[segment]<<4)+register[modRM_arr2[((c>>3)&0x18)|(c&0x7)][len2]]+1]<<8);
+					register["DS"] = RAM[(register[segment]<<4)+register[modRM_arr2[((c>>3)&0x18)|(c&0x7)][len2]]+2]+(RAM[(register[segment]<<4)+register[modRM_arr2[((c>>3)&0x18)|(c&0x7)][len2]]+3]<<8);
+				}else{
+					register[modRM_arr1[(c>>3)&0x7][len1]] = RAM[((register[segment]<<4)+register[modRM_arr2[((c>>3)&0x18)|(c&0x7)][len2]])%(1024*1024)]+(RAM[((register[segment]<<4)+register[modRM_arr2[((c>>3)&0x18)|(c&0x7)][len2]]+1)%(1024*1024)]<<8);
+					register["DS"] = RAM[((register[segment]<<4)+register[modRM_arr2[((c>>3)&0x18)|(c&0x7)][len2]]+2)%(1024*1024)]+(RAM[((register[segment]<<4)+register[modRM_arr2[((c>>3)&0x18)|(c&0x7)][len2]]+3)%(1024*1024)]<<8);
+				}
 				console.log((modRM_arr1[(c>>3)&0x7][len1])+":0x"+register[modRM_arr1[(c>>3)&0x7][len1]].toString(16));
 				console.log("DS:0x"+register["DS"].toString(16));
 			}else{
@@ -254,12 +303,20 @@ function run_code(RAM,register){
 			code_length = 2;
 		break;
 		case 0xBF://MOV DI
-			register["DI"] = RAM[addr+1]|RAM[addr+2]<<8;
+			if(a20){
+				register["DI"] = RAM[cal_addr(addr+1)]|RAM[cal_addr(addr+2)]<<8;
+			}else{
+				register["DI"] = RAM[(addr+1)%(1024*1024)]|RAM[(addr+2)%(1024*1024)]<<8;
+			}
 			console.log("DI:0x"+register["DI"].toString(16));
 			code_length=3;
 		break;
 		case 0xB9://MOV CX
-			register["CX"] = RAM[addr+1]|RAM[addr+2]<<8;
+			if(a20){
+				register["CX"] = RAM[cal_addr(addr+1)]|RAM[cal_addr(addr+2)]<<8;
+			}else{
+				register["CX"] = RAM[(addr+1)%(1024*1024)]|RAM[(addr+2)%(1024*1024)]<<8;
+			}
 			console.log("CX:0x"+register["CX"].toString(16));
 			code_length=3;
 		break;
@@ -269,9 +326,13 @@ function run_code(RAM,register){
 		break;
 		case 0xF3://REP
 			console.log("REP");
-			if(RAM[addr+1] == 0xA4){
+			if(RAM[cal_addr(addr+1)] == 0xA4){
 				for(i=0;register["CX"];i++){
-					RAM[register["ES"]<<4+register["DI"]+i] = RAM[register["DS"]<<4+register["SI"]+i];
+					if(a20){
+						RAM[register["ES"]<<4+register["DI"]+i] = RAM[register["DS"]<<4+register["SI"]+i];
+					}else{
+						RAM[(register["ES"]<<4+register["DI"]+i)%(1024*1024)] = RAM[(register["DS"]<<4+register["SI"]+i)%(1024*1024)];
+					}
 					register["CX"]--;
 				}
 			}else{
@@ -280,33 +341,33 @@ function run_code(RAM,register){
 			}
 			code_length=2;
 		break;
+		/*No A20 support below*/
 		case 0x06://PUSH ES
 			register["SP"] = register["SP"] - 2;
-			RAM[(register["SS"]<<4)+register["SP"]] = register["ES"]>>8;
-			RAM[(register["SS"]<<4)+register["SP"]+1] = register["ES"]&0xFF;
+			RAM[cal_addr((register["SS"]<<4)+register["SP"])] = register["ES"]>>8;
+			RAM[cal_addr((register["SS"]<<4)+register["SP"]+1)] = register["ES"]&0xFF;
 			code_length=1;
 		break;
 		case 0x1F://POP DS
-			register["DS"] = RAM[(register["SS"]<<4)+register["SP"]]<<8|RAM[(register["SS"]<<4)+register["SP"]+1]&0xFF;
+			register["DS"] = RAM[cal_addr((register["SS"]<<4)+register["SP"])]<<8|RAM[cal_addr((register["SS"]<<4)+register["SP"]+1)]&0xFF;
 			register["SP"] = register["SP"] + 2;
 			console.log("DS:"+register["DS"]);
 			code_length=1;
 		break;
 		case 0xC6://MOV
-			var mod = getMod(RAM[addr+1]);
-			var RM = getRM(RAM[addr+1]);
-			var reg = getReg_Opcode(RAM[addr+1]);
+			var mod = getMod(RAM[cal_addr(addr+1)]);
+			var RM = getRM(RAM[cal_addr(addr+1)]);
+			var reg = getReg_Opcode(RAM[cal_addr(addr+1)]);
 			var modrm = mod<<3|RM;
 			var len2 = 0;
-			console.log(modrm);
 			if((c&0xC0) == 0x40){
 				if(c == 0x45){
-					if(RAM[addr+2]>>7){
-						var op2 = ~(RAM[addr+2]&0x7f)-1;
+					if(RAM[cal_addr(addr+2)]>>7){
+						var op2 = ~(RAM[cal_addr(addr+2)]&0x7f)-1;
 					}else{
-						var op2 = RAM[addr+2];
+						var op2 = RAM[cal_addr(addr+2)];
 					}
-					RAM[(register[segment]<<4)+register[modRM_arr2[((c>>3)&0x18)|(c&0x7)][len2]]+op2] = RAM[addr+3];
+					RAM[cal_addr((register[segment]<<4)+register[modRM_arr2[((c>>3)&0x18)|(c&0x7)][len2]]+op2)] = RAM[cal_addr(addr+3)];
 					//[XX] + DISP8
 				}else{
 					finished = true;
@@ -318,14 +379,14 @@ function run_code(RAM,register){
 					finished = true;
 					console.log("Not supported.");
 				}
-				RAM[(register[segment]<<4)+((RAM[addr+3]<<8)|RAM[addr+2])] = RAM[addr+4];
+				RAM[cal_addr((register[segment]<<4)+((RAM[cal_addr(addr+3)]<<8)|RAM[cal_addr(addr+2)]))] = RAM[cal_addr(addr+4)];
 				code_length=5;
 			}else if(modrm == 7){
 				if(reg != 0){
 					finished = true;
 					console.log("Not supported.");
 				}
-				RAM[(register[segment]<<4)+(register["BX"])] = RAM[addr+2];
+				RAM[cal_addr((register[segment]<<4)+(register["BX"]))] = RAM[cal_addr(addr+2)];
 				code_length=3;
 			}else{
 				finished = true;
@@ -334,16 +395,16 @@ function run_code(RAM,register){
 			
 		break;
 		case 0x8B://MOV
-			var mod = getMod(RAM[addr+1]);
-			var RM = getRM(RAM[addr+1]);
-			var reg = getReg_Opcode(RAM[addr+1]);
+			var mod = getMod(RAM[cal_addr(addr+1)]);
+			var RM = getRM(RAM[cal_addr(addr+1)]);
+			var reg = getReg_Opcode(RAM[cal_addr(addr+1)]);
 			var modrm = mod<<3|RM;
 			if(mod == 0){
 				if(RM == 6){
-					register[modRM_arr1[reg][1]] = (RAM[addr+2]&0xFF)|(RAM[addr+1]<<8);
+					register[modRM_arr1[reg][1]] = (RAM[cal_addr(addr+2)]&0xFF)|(RAM[cal_addr(addr+1)]<<8);
 					// DISP16
 				}else if(RM == 7){
-					register[modRM_arr1[reg][1]] = RAM[(register[segment]<<4)+register["BX"]]|(RAM[(register[segment]<<4)+register["BX"]+1]<<8);
+					register[modRM_arr1[reg][1]] = RAM[cal_addr((register[segment]<<4)+register["BX"])]|(RAM[cal_addr((register[segment]<<4)+register["BX"]+1)]<<8);
 				}else{
 					finished = true;
 					console.log("Not supported.");
@@ -355,53 +416,53 @@ function run_code(RAM,register){
 			code_length=2;
 		break;
 		case 0xB8://MOV AX
-			register["AX"] = RAM[addr+1]|RAM[addr+2]<<8;
+			register["AX"] = RAM[cal_addr(addr+1)]|RAM[cal_addr(addr+2)]<<8;
 			console.log("AX:0x"+register["AX"].toString(16));
 			code_length=3;
 		break;
 		case 0xB4://MOV AH
-			register["AX"] = (register["AX"] & 0x00FF) | RAM[addr+1]<<8;
+			register["AX"] = (register["AX"] & 0x00FF) | RAM[cal_addr(addr+1)]<<8;
 			//Only update AH
 			console.log("AH:0x"+(register["AX"]>>8).toString(16));
 			code_length=2;
 		break;
 		case 0xB0://MOV AL
-			register["AX"] = (register["AX"] & 0xFF00) | RAM[addr+1];
+			register["AX"] = (register["AX"] & 0xFF00) | RAM[cal_addr(addr+1)];
 			//Only update AL
 			console.log("AL:0x"+(register["AX"]&0x00FF).toString(16));
 			code_length=2;
 		break;
 		case 0xB6://MOV DH
-			register["DX"] = (register["DX"] & 0x00FF) | RAM[addr+1]<<8;
+			register["DX"] = (register["DX"] & 0x00FF) | RAM[cal_addr(addr+1)]<<8;
 			//Only update DH
 			console.log("DH:0x"+(register["DX"]>>8).toString(16));
 			code_length=2;
 		break;
 		case 0xB2://MOV DL
-			register["DX"] = (register["DX"] & 0xFF00) | RAM[addr+1];
+			register["DX"] = (register["DX"] & 0xFF00) | RAM[cal_addr(addr+1)];
 			//Only update DL
 			console.log("DL:0x"+(register["DX"]&0x00FF).toString(16));
 			code_length=2;
 		break;
 		case 0xB7://MOV BH
-			register["BX"] = (register["BX"] & 0x00FF) | RAM[addr+1]<<8;
+			register["BX"] = (register["BX"] & 0x00FF) | RAM[cal_addr(addr+1)]<<8;
 			//Only update BH
 			console.log("BH:0x"+(register["BX"]>>8).toString(16));
 			code_length=2;
 		break;
 		case 0xB3://MOV BL
-			register["BX"] = (register["BX"] & 0xFF00) | RAM[addr+1];
+			register["BX"] = (register["BX"] & 0xFF00) | RAM[cal_addr(addr+1)];
 			//Only update BL
 			console.log("BL:0x"+(register["BX"]&0x00FF).toString(16));
 			code_length=2;
 		break;
 		case 0xBA://MOV DX
-			register["DX"] = RAM[addr+1]|RAM[addr+2]<<8;
+			register["DX"] = RAM[cal_addr(addr+1)]|RAM[cal_addr(addr+2)]<<8;
 			console.log("DX:0x"+register["DX"].toString(16));
 			code_length=3;
 		break;
 		case 0xCD://INT
-			switch(RAM[addr+1]){
+			switch(RAM[cal_addr(addr+1)]){
 				case 0x10:
 					switch((register["AX"]>>8)&0xFF){
 						case 0x0:
@@ -484,10 +545,10 @@ function run_code(RAM,register){
 					//finished = true;
 					//console.log("Not supported.");
 					no_code_length_added = true;
-					interrupt(RAM[addr+1]);
+					interrupt(RAM[cal_addr(addr+1)]);
 				break;
 			}
-			console.log("INT:0x"+RAM[addr+1].toString(16));
+			console.log("INT:0x"+RAM[cal_addr(addr+1)].toString(16));
 			code_length=2;
 		break;
 		case 0xE8://CALL
@@ -498,20 +559,20 @@ function run_code(RAM,register){
 			console.log(((register["SS"]<<4)+register["SP"]).toString(16));
 			console.log(RAM[(register["SS"]<<4)+register["SP"]].toString(16));
 			console.log(RAM[(register["SS"]<<4)+register["SP"]+1].toString(16));
-			register["IP"] += rel((RAM[addr+2]<<8)|RAM[addr+1],16);
+			register["IP"] += rel((RAM[cal_addr(addr+2)]<<8)|RAM[cal_addr(addr+1)],16);
 			console.log("AL 0x"+(register["AX"]>>8).toString(16));
-			console.log("CALL 0x"+RAM[addr+1].toString(16));
+			console.log("CALL 0x"+RAM[cal_addr(addr+1)].toString(16));
 		break;
 		case 0x8A://MOV r8 r/m8
-			var mod = getMod(RAM[addr+1]);
-			var RM = getRM(RAM[addr+1]);
-			var reg = getReg_Opcode(RAM[addr+1]);
+			var mod = getMod(RAM[cal_addr(addr+1)]);
+			var RM = getRM(RAM[cal_addr(addr+1)]);
+			var reg = getReg_Opcode(RAM[cal_addr(addr+1)]);
 			if(mod == 0 && RM == 0x7){
 				//BX
 				flush_register_get();
-				register[modRM_arr1[reg][0]] = RAM[(register[segment]<<4)+register["BX"]];
+				register[modRM_arr1[reg][0]] = RAM[cal_addr((register[segment]<<4)+register["BX"])];
 				flush_register_set();
-				console.log("Address:0x"+((register[segment]<<4)+register["BX"]).toString(16));
+				console.log("Address:0x"+((cal_addr(register[segment]<<4)+register["BX"])).toString(16));
 				console.log("Register:"+modRM_arr1[reg][0]);
 				console.log("Data:0x"+register[modRM_arr1[reg][0]].toString(16));
 			}else{
@@ -522,12 +583,12 @@ function run_code(RAM,register){
 		break;
 		case 0x3C://CMP AL,imm
 			flush_register_get();
-			cmp(register["AL"],RAM[addr+1],8);
+			cmp(register["AL"],RAM[cal_addr(addr+1)],8);
 			code_length = 2;
 		break;
 		case 0x74://JE JZ
 			if(readBit(register["FLAG"],ZF)){
-				register["IP"]+=rel(RAM[addr+1],8);
+				register["IP"]+=rel(RAM[cal_addr(addr+1)],8);
 			}
 			code_length=2;
 		break;
@@ -540,17 +601,17 @@ function run_code(RAM,register){
 			code_length=1;
 		break;
 		case 0x83://GROUP
-			var mod = getMod(RAM[addr+1]);
-			var RM = getRM(RAM[addr+1]);
-			var opcode = getReg_Opcode(RAM[addr+1]);
+			var mod = getMod(RAM[cal_addr(addr+1)]);
+			var RM = getRM(RAM[cal_addr(addr+1)]);
+			var opcode = getReg_Opcode(RAM[cal_addr(addr+1)]);
 			var modrm = mod<<3|RM;
 			switch(opcode){
 				case 0://ADD r/m16 imm8
 					if(mod == 3){
 						console.log("Data:0x"+register[modRM_arr2[modrm][1]].toString(16));
-						register[modRM_arr2[modrm][1]] += rel(RAM[addr+2],8);
+						register[modRM_arr2[modrm][1]] += rel(RAM[cal_addr(addr+2)],8);
 						console.log("Register:"+modRM_arr2[modrm][1]);
-						console.log("Plus:"+RAM[addr+2].toString(16));
+						console.log("Plus:"+RAM[cal_addr(addr+2)].toString(16));
 						console.log("Data:0x"+register[modRM_arr2[modrm][1]].toString(16));
 					}else{
 						finished = true;
@@ -559,7 +620,7 @@ function run_code(RAM,register){
 				break;
 				case 7:
 					if(mod == 3){
-						cmp(register[modRM_arr2[modrm][1]],RAM[addr+2],16);
+						cmp(register[modRM_arr2[modrm][1]],RAM[cal_addr(addr+2)],16);
 					}else{
 						finished = true;
 						console.log("Not supported.");
@@ -606,13 +667,13 @@ function run_code(RAM,register){
 			code_length=1;
 		break;
 		case 0xB5://MOV CH
-			register["CX"] = (register["CX"] & 0x00FF) | RAM[addr+1]<<8;
+			register["CX"] = (register["CX"] & 0x00FF) | RAM[cal_addr(addr+1)]<<8;
 			//Only update CH
 			console.log("CH:0x"+(register["CX"]>>8).toString(16));
 			code_length=2;
 		break;
 		case 0xB1://MOV CL
-			register["CX"] = (register["CX"] & 0xFF00) | RAM[addr+1];
+			register["CX"] = (register["CX"] & 0xFF00) | RAM[cal_addr(addr+1)];
 			//Only update CL
 			console.log("CL:0x"+(register["CX"]&0x00FF).toString(16));
 			code_length=2;
@@ -623,13 +684,13 @@ function run_code(RAM,register){
 			switch(RAM[addr]){
 				case 0x82://JC JB JNAE
 					if(readBit(register["FLAG"],CF)){
-						register["IP"] += rel((RAM[addr+2]<<8)|RAM[addr+1],16);
+						register["IP"] += rel((RAM[cal_addr(addr+2)]<<8)|RAM[cal_addr(addr+1)],16);
 					}
 					code_length = 4;//Include two-byte opcode
 				break;
 				case 0x84://JZ JE
 					if(readBit(register["FLAG"],ZF)){
-						register["IP"] += rel((RAM[addr+2]<<8)|RAM[addr+1],16);
+						register["IP"] += rel((RAM[cal_addr(addr+2)]<<8)|RAM[cal_addr(addr+1)],16);
 					}
 					code_length = 4;//Include two-byte opcode
 				break;
@@ -640,14 +701,14 @@ function run_code(RAM,register){
 			}
 		break;
 		case 0x81://GROUP
-			var mod = getMod(RAM[addr+1]);
-			var RM = getRM(RAM[addr+1]);
-			var opcode = getReg_Opcode(RAM[addr+1]);
+			var mod = getMod(RAM[cal_addr(addr+1)]);
+			var RM = getRM(RAM[cal_addr(addr+1)]);
+			var opcode = getReg_Opcode(RAM[cal_addr(addr+1)]);
 			var modrm = mod<<3|RM;
 			if(opcode == 7){//CMP r/m16 imm16
 				if(mod == 3){
 					var a = register[modRM_arr2[modrm][1]];
-					var b = RAM[addr+2]|(RAM[addr+3]<<8);
+					var b = RAM[cal_addr(addr+2)]|(RAM[cal_addr(addr+3)]<<8);
 					cmp(a,b,16);
 					console.log("Register:"+modRM_arr2[modrm][1]);
 				}else{
@@ -662,9 +723,9 @@ function run_code(RAM,register){
 			code_length=4;
 		break;
 		case 0x89://MOV r/m16 r16
-			var mod = getMod(RAM[addr+1]);
-			var RM = getRM(RAM[addr+1]);
-			var reg = getReg_Opcode(RAM[addr+1]);
+			var mod = getMod(RAM[cal_addr(addr+1)]);
+			var RM = getRM(RAM[cal_addr(addr+1)]);
+			var reg = getReg_Opcode(RAM[cal_addr(addr+1)]);
 			var modrm = mod<<3|RM;
 			if(mod == 3){//CMP r/m16 imm16
 				register[modRM_arr2[modrm][1]] = register[modRM_arr1[reg][1]];
@@ -679,9 +740,9 @@ function run_code(RAM,register){
 			code_length=2;
 		break;
 		case 0x38://CMP r/m8 r8
-			var mod = getMod(RAM[addr+1]);
-			var RM = getRM(RAM[addr+1]);
-			var reg = getReg_Opcode(RAM[addr+1]);
+			var mod = getMod(RAM[cal_addr(addr+1)]);
+			var RM = getRM(RAM[cal_addr(addr+1)]);
+			var reg = getReg_Opcode(RAM[cal_addr(addr+1)]);
 			var modrm = mod<<3|RM;
 			if(mod == 3){
 				flush_register_get();
@@ -695,26 +756,26 @@ function run_code(RAM,register){
 			code_length = 2;
 		break;
 		case 0x3D://CMP AX,imm
-			var b = RAM[addr+1]|(RAM[addr+2]<<8);
+			var b = RAM[cal_addr(addr+1)]|(RAM[cal_addr(addr+2)]<<8);
 			cmp(register["AX"],b,16);
 			code_length = 3;
 		break;
 		case 0x75://JNE JNZ
 			if(!readBit(register["FLAG"],ZF)){
-				register["IP"]+=rel(RAM[addr+1],8);
+				register["IP"]+=rel(RAM[cal_addr(addr+1)],8);
 				console.log("Jump");
 			}
 			code_length=2;
 		break;
 		case 0x72://JC JB JNAE
 			if(readBit(register["FLAG"],CF)){
-				register["IP"] += rel(RAM[addr+1],8);
+				register["IP"] += rel(RAM[cal_addr(addr+1)],8);
 			}
 			code_length = 2;
 		break;
 		case 0xEA://JMP F
-			register["IP"] = (RAM[addr+2]<<8)|RAM[addr+1];
-			register["CS"] = (RAM[addr+4]<<8)|RAM[addr+3];
+			register["IP"] = (RAM[cal_addr(addr+2)]<<8)|RAM[cal_addr(addr+1)];
+			register["CS"] = (RAM[addr+4]<<8)|RAM[cal_addr(addr+3)];
 			console.log("Jump to 0x"+register["CS"].toString(16)+":0x"+register["IP"].toString(16));
 			no_code_length_added = 1;
 			code_length = 5;
@@ -734,9 +795,9 @@ function run_code(RAM,register){
 			code_length=1;
 		break;
 		case 0xC7://MOV
-			var mod = getMod(RAM[addr+1]);
-			var RM = getRM(RAM[addr+1]);
-			var reg = getReg_Opcode(RAM[addr+1]);
+			var mod = getMod(RAM[cal_addr(addr+1)]);
+			var RM = getRM(RAM[cal_addr(addr+1)]);
+			var reg = getReg_Opcode(RAM[cal_addr(addr+1)]);
 			var modrm = mod<<3|RM;
 			if(reg != 0){//Unknown code
 				console.log("Not supported.");
@@ -744,20 +805,20 @@ function run_code(RAM,register){
 			}else{
 				if(modrm == 6){
 					// DISP16
-					var data_address = (register[segment]<<4)+(RAM[addr+2]|(RAM[addr+3]<<8));
+					var data_address = cal_addr((register[segment]<<4)+(RAM[cal_addr(addr+2)]|(RAM[cal_addr(addr+3)]<<8)));
 					data_address %= 1024*1024;
 					RAM[data_address] = RAM[addr+4];
 					RAM[data_address+1] = RAM[addr+5];
 					console.log("Data Address:0x"+data_address.toString(16));
-					console.log("Data:0x"+((RAM[data_address+1]<<8)|RAM[data_address]).toString(16));
+					console.log("Data:0x"+(cal_addr((RAM[data_address+1]<<8)|RAM[data_address])).toString(16));
 				}
 			}
 			code_length = 6;
 		break;
 		case 0x8C://MOV 
-			var mod = getMod(RAM[addr+1]);
-			var RM = getRM(RAM[addr+1]);
-			var reg = getReg_Opcode(RAM[addr+1]);
+			var mod = getMod(RAM[cal_addr(addr+1)]);
+			var RM = getRM(RAM[cal_addr(addr+1)]);
+			var reg = getReg_Opcode(RAM[cal_addr(addr+1)]);
 			var modrm = mod<<3|RM;
 			register[modRM_arr2[modrm][1]] = register[modRM_arr1[reg][5]];
 			console.log("Register 1:"+modRM_arr2[modrm][1]);
@@ -765,14 +826,14 @@ function run_code(RAM,register){
 			code_length = 2;
 		break;
 		case 0xA3://MOV
-			var save_addr = (register[segment]<<4)+((RAM[addr+1]&0xFF)|(RAM[addr+2]<<8));
+			var save_addr = cal_addr((register[segment]<<4)+((RAM[cal_addr(addr+1)]&0xFF)|(RAM[cal_addr(addr+2)]<<8)));
 			RAM[save_addr] = register["AX"]&0xFF;
 			RAM[save_addr+1] = (register["AX"]&0xFF00)>>8;
 			console.log("Data address:"+save_addr.toString(16));
 			code_length = 3;
 		break;
 		case 0xE6://OUT
-			IO_port[RAM[addr+1]] = register["AX"]&0xFF;
+			IO_port[RAM[cal_addr(addr+1)]] = register["AX"]&0xFF;
 			code_length = 2;
 		break;
 		case 0xFB://STI
@@ -788,7 +849,7 @@ function run_code(RAM,register){
 		case 0xCF://IRET
 			console.log("IRET");
 			var reg_addr;
-			reg_addr = (register["SS"]<<4)+register["SP"];
+			reg_addr = cal_addr((register["SS"]<<4)+register["SP"]);
 			register["IP"] = (RAM[reg_addr]<<8)|(RAM[reg_addr+1]&0xFF);
 			register["SP"] = register["SP"] + 2;
 			reg_addr = (register["SS"]<<4)+register["SP"];
@@ -807,24 +868,24 @@ function run_code(RAM,register){
 		break;
 		case 0xE4:
 			console.log("IN");
-			var IO_port_data = IO_port[RAM[addr+1]];
+			var IO_port_data = IO_port[RAM[cal_addr(addr+1)]];
 			register["AX"] = (register["AX"]&0xFF00)|IO_port_data&0xFF;
-			console.log("IO Port:0x"+RAM[addr+1].toString(16));
+			console.log("IO Port:0x"+RAM[cal_addr(addr+1)].toString(16));
 			console.log("Data:0x"+IO_port_data.toString(16));
 			code_length = 2;
 		break;
 		case 0x80://GROUP
-			var mod = getMod(RAM[addr+1]);
-			var RM = getRM(RAM[addr+1]);
-			var opcode = getReg_Opcode(RAM[addr+1]);
+			var mod = getMod(RAM[cal_addr(addr+1)]);
+			var RM = getRM(RAM[cal_addr(addr+1)]);
+			var opcode = getReg_Opcode(RAM[cal_addr(addr+1)]);
 			var modrm = mod<<3|RM;
 			if(opcode == 0){
 				if(mod == 3){
 					//ADD r/m8 imm8
 					flush_register_get();
 					console.log("Data a:"+modRM_arr2[modrm][0]+" 0x"+register[modRM_arr2[modrm][0]].toString(16));
-					console.log("Data b:0x"+RAM[addr+2].toString(16));
-					register[modRM_arr2[modrm][0]] = (register[modRM_arr2[modrm][0]] + RAM[addr+2])&0xFF;
+					console.log("Data b:0x"+RAM[cal_addr(addr+2)].toString(16));
+					register[modRM_arr2[modrm][0]] = (register[modRM_arr2[modrm][0]] + RAM[cal_addr(addr+2)])&0xFF;
 					flush_register_set();
 					console.log("CH:0x"+((register["CX"]>>8)&0xFF).toString(16));
 					console.log("Data:0x"+register[modRM_arr2[modrm][0]].toString(16));
@@ -837,12 +898,12 @@ function run_code(RAM,register){
 				if(mod == 3){
 					//CMP r/m8 imm8
 					flush_register_get();
-					cmp(register[modRM_arr2[modrm][0]],RAM[addr+2],8);
+					cmp(register[modRM_arr2[modrm][0]],RAM[cal_addr(addr+2)],8);
 					flush_register_set();
 					console.log("CMP a "+modRM_arr2[modrm][0]+":0x"+register[modRM_arr2[modrm][0]].toString(16));
-					console.log("CMP b:0x"+RAM[addr+2].toString(16));
+					console.log("CMP b:0x"+RAM[cal_addr(addr+2)].toString(16));
 				}else if(mod == 0){
-					cmp(RAM[(register[segment]<<4)+register[modRM_arr2[modrm][0]]],RAM[addr+2],8);
+					cmp(RAM[(register[segment]<<4)+register[modRM_arr2[modrm][0]]],RAM[cal_addr(addr+2)],8);
 				}else{
 					finished = true;
 					console.log("Not supported.");
@@ -854,12 +915,12 @@ function run_code(RAM,register){
 					console.log("AND a ["+modRM_arr2[modrm][0]+"]");
 					console.log("Address:0x"+RAM_addr.toString(16));
 					console.log("Data:0x"+RAM[RAM_addr].toString(16));
-					console.log("AND b:0x"+RAM[addr+2].toString(16));
-					RAM[RAM_addr] = RAM[RAM_addr] & RAM[addr+2];
+					console.log("AND b:0x"+RAM[cal_addr(addr+2)].toString(16));
+					RAM[RAM_addr] = RAM[RAM_addr] & RAM[cal_addr(addr+2)];
 					console.log("AND:0x"+RAM[RAM_addr].toString(16));
 				}else if(mod == 3){
 					flush_register_get();
-					register[modRM_arr2[modrm][0]] = register[modRM_arr2[modrm][0]] & RAM[addr+2];
+					register[modRM_arr2[modrm][0]] = register[modRM_arr2[modrm][0]] & RAM[cal_addr(addr+2)];
 					flush_register_set();
 				}else{
 					finished = true;
@@ -872,9 +933,9 @@ function run_code(RAM,register){
 			code_length = 3;
 		break;
 		case 0x30://XOR r/m8 r8
-			var mod = getMod(RAM[addr+1]);
-			var RM = getRM(RAM[addr+1]);
-			var reg = getReg_Opcode(RAM[addr+1]);
+			var mod = getMod(RAM[cal_addr(addr+1)]);
+			var RM = getRM(RAM[cal_addr(addr+1)]);
+			var reg = getReg_Opcode(RAM[cal_addr(addr+1)]);
 			var modrm = mod<<3|RM;
 			if(mod == 3){
 				flush_register_get();
@@ -889,9 +950,9 @@ function run_code(RAM,register){
 			code_length = 2;
 		break;
 		case 0x88://MOV 
-			var mod = getMod(RAM[addr+1]);
-			var RM = getRM(RAM[addr+1]);
-			var reg = getReg_Opcode(RAM[addr+1]);
+			var mod = getMod(RAM[cal_addr(addr+1)]);
+			var RM = getRM(RAM[cal_addr(addr+1)]);
+			var reg = getReg_Opcode(RAM[cal_addr(addr+1)]);
 			var modrm = mod<<3|RM;
 			if(mod == 0){
 				var RAM_addr = (register[segment]<<4)+register[modRM_arr2[modrm][0]];
@@ -917,9 +978,9 @@ function run_code(RAM,register){
 			code_length = 2;
 		break;
 		case 0x01://ADD 
-			var mod = getMod(RAM[addr+1]);
-			var RM = getRM(RAM[addr+1]);
-			var reg = getReg_Opcode(RAM[addr+1]);
+			var mod = getMod(RAM[cal_addr(addr+1)]);
+			var RM = getRM(RAM[cal_addr(addr+1)]);
+			var reg = getReg_Opcode(RAM[cal_addr(addr+1)]);
 			var modrm = mod<<3|RM;
 			console.log("Register a:"+modRM_arr2[modrm][1]);
 			console.log("Data a:0x"+register[modRM_arr2[modrm][1]].toString(16));
@@ -931,18 +992,18 @@ function run_code(RAM,register){
 		break;
 		case 0xE9://JMP
 			console.log("JMP");
-			register["IP"] += rel(RAM[addr+1]|(RAM[addr+2]<<8),16);
+			register["IP"] += rel(RAM[cal_addr(addr+1)]|(RAM[cal_addr(addr+2)]<<8),16);
 			code_length=3;
 			console.log("Address IP:0x"+(register["IP"]+3).toString(16));
-			if(rel(RAM[addr+1]|(RAM[addr+2]<<8),16) == -3){
+			if(rel(RAM[cal_addr(addr+1)]|(RAM[cal_addr(addr+2)]<<8),16) == -3){
 				console.log("Loop");
 				machine_mode = POWER_HALT;
 			}
 		break;
 		case 0xFF://GROUP
-			var mod = getMod(RAM[addr+1]);
-			var RM = getRM(RAM[addr+1]);
-			var opcode = getReg_Opcode(RAM[addr+1]);
+			var mod = getMod(RAM[cal_addr(addr+1)]);
+			var RM = getRM(RAM[cal_addr(addr+1)]);
+			var opcode = getReg_Opcode(RAM[cal_addr(addr+1)]);
 			var modrm = mod<<3|RM;
 			code_length = 2;
 			switch(opcode){
@@ -970,9 +1031,9 @@ function run_code(RAM,register){
 			}
 		break;
 		case 0x39://CMP r/m16 r16
-			var mod = getMod(RAM[addr+1]);
-			var RM = getRM(RAM[addr+1]);
-			var reg = getReg_Opcode(RAM[addr+1]);
+			var mod = getMod(RAM[cal_addr(addr+1)]);
+			var RM = getRM(RAM[cal_addr(addr+1)]);
+			var reg = getReg_Opcode(RAM[cal_addr(addr+1)]);
 			var modrm = mod<<3|RM;
 			if(mod == 3){
 				cmp(register[modRM_arr2[modrm][1]],register[modRM_arr1[reg][1]],16);
@@ -990,7 +1051,7 @@ function run_code(RAM,register){
 			var jump = bit_SF^bit_OF;
 			console.log("JL:"+jump);
 			if(jump){
-				register["IP"] += rel(RAM[addr+1],8);
+				register["IP"] += rel(RAM[cal_addr(addr+1)],8);
 			}
 			code_length = 2;
 		break;
@@ -1001,14 +1062,14 @@ function run_code(RAM,register){
 			var jump = (bit_SF == bit_OF) && (bit_ZF == 0);
 			console.log("JG:"+jump);
 			if(jump){
-				register["IP"] += rel(RAM[addr+1],8);
+				register["IP"] += rel(RAM[cal_addr(addr+1)],8);
 			}
 			code_length = 2;
 		break;
 		case 0xF6://GROUP
-			var mod = getMod(RAM[addr+1]);
-			var RM = getRM(RAM[addr+1]);
-			var opcode = getReg_Opcode(RAM[addr+1]);
+			var mod = getMod(RAM[cal_addr(addr+1)]);
+			var RM = getRM(RAM[cal_addr(addr+1)]);
+			var opcode = getReg_Opcode(RAM[cal_addr(addr+1)]);
 			var modrm = mod<<3|RM;
 			if(opcode == 2){//NOT
 				if(mod == 3){
@@ -1031,7 +1092,7 @@ function run_code(RAM,register){
 		break;
 		case 0x04://ADD
 			var val = register["AX"]&0xFF;
-			val+=RAM[addr+1];
+			val+=RAM[cal_addr(addr+1)];
 			register["AX"] = (register["AX"]&0xFF00)|val&0xFF;
 			code_length = 2;
 		break;
@@ -1042,20 +1103,20 @@ function run_code(RAM,register){
 			var jump = (bit_SF^bit_OF)||(bit_ZF == 1);
 			console.log("JLE:"+jump);
 			if(jump){
-				register["IP"] += rel(RAM[addr+1],8);
+				register["IP"] += rel(RAM[cal_addr(addr+1)],8);
 			}
 			code_length = 2;
 		break;
 		case 0x6A://PUSH
 			register["SP"] = register["SP"] - 2;
 			RAM[(register["SS"]<<4)+register["SP"]] = 0;
-			RAM[(register["SS"]<<4)+register["SP"]+1] = RAM[addr+1];
+			RAM[(register["SS"]<<4)+register["SP"]+1] = RAM[cal_addr(addr+1)];
 			code_length=2;
 		break;
 		case 0x68://PUSH
 			register["SP"] = register["SP"] - 2;
-			RAM[(register["SS"]<<4)+register["SP"]] = RAM[addr+2];
-			RAM[(register["SS"]<<4)+register["SP"]+1] = RAM[addr+1];
+			RAM[(register["SS"]<<4)+register["SP"]] = RAM[cal_addr(addr+2)];
+			RAM[(register["SS"]<<4)+register["SP"]+1] = RAM[cal_addr(addr+1)];
 			code_length=3;
 		break;
 		default:
@@ -1253,6 +1314,13 @@ function interrupt(num){
 				run_code(RAM,register);
 			}
 		}
+	}
+}
+function cal_addr(mem){
+	if(a20){
+		return mem;
+	}else{
+		return mem%(1024*1024);
 	}
 }
 function timer(){
