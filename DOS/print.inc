@@ -1,12 +1,3 @@
-ORG 0x100
-;Program
-;For test
-MOV BX,run_success_text
-call print_text
-MOV AH,0x4C
-int 0x21
-loop:
-JMP loop
 print_char:
 ;print AL
 PUSH BX
@@ -72,6 +63,3 @@ print_finish_no_return:
 POP BX
 POP AX
 ret
-run_success_text:
-db "CMD",0x00
-times 2048-($-$$) db 0

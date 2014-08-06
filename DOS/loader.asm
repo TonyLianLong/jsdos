@@ -96,9 +96,9 @@ JNE no_such_file
 MOV BX,find_success_text
 call print_text
 run_code:
-;Read Cluster's first 1024 byte
+;Read Cluster's first 2048 byte
 ;Address in floppy:0x40A00
-MOV AX,0x0050
+MOV AX,0x07d0
 MOV DS,AX
 MOV ES,AX
 MOV AH,0x02
@@ -117,8 +117,8 @@ MOV SP,0x0600
 MOV BX,0
 MOV CX,0
 MOV DX,0
-jmp 0x50:0x100
-;jump to 0x600
+jmp 0x7d0:0x100
+;jump to 0x7e00
 loop:
 JMP loop
 no_such_file:
@@ -201,6 +201,6 @@ db "Find file.",0x00
 check_disk_success_text:
 db "Check disk success.",0x00
 program_name:
-db "COMMAND COM"
+db "DOS     SYS"
 times 510-($-$$) db 0
 dw 0xAA55

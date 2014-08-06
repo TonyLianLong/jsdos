@@ -1,5 +1,6 @@
 #This Makefile is the file to build DOS
 all:
-	( cd "DOS" && $(MAKE) all -f Makefile) || exit 1
+	make -C DOS
+	cp DOS/loader.img loader.img
 clean:
-	rm DOS/*.bin
+	make -C DOS clean

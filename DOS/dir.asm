@@ -1,9 +1,10 @@
+%include "struct.inc"
 ORG 0x100
-;Program
+;DIR
 ;For test
 MOV BX,run_success_text
 call print_text
-MOV AH,0x4C
+MOV AX,0x4C00
 int 0x21
 loop:
 JMP loop
@@ -74,4 +75,4 @@ POP AX
 ret
 run_success_text:
 db "DIR",0x00
-times 1024-($-$$) db 0
+times 2048-($-$$) db 0
